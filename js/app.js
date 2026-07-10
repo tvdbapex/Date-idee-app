@@ -97,6 +97,21 @@ function matchScore(card){
   return (card.isEvent ? 2 : 0) + (match ? 1 : 0);
 }
 
+// ---------- Status (favorite / done) ----------
+async function toggleStatus(card, kind){
+  const set = kind === 'starred' ? state.starred : state.done;
+  const wasOn = set.has(card.id);
+  wasOn ? set.delete(card.id) : set.add(card.id);
+  renderCards();
+
+  try {
+    await saveStatus(card.id, { starred: state.starred.has(card.id), done: state.done.has(card.id) });
+  } catch(err){
+    wasOn ? set.add(card.id) : set.delete(card.id);
+    renderCards();
+  }
+}
+
 // ---------- Render: cards ----------
 const gridEl = document.getElementById('cardGrid');
 const countEl = document.getElementById('resultCount');
@@ -146,14 +161,8 @@ function renderCards(){
       </div>
     `;
 
-    el.querySelector('.star-btn').addEventListener('click', () => {
-      starred ? state.starred.delete(card.id) : state.starred.add(card.id);
-      renderCards();
-    });
-    el.querySelector('.done-btn').addEventListener('click', () => {
-      done ? state.done.delete(card.id) : state.done.add(card.id);
-      renderCards();
-    });
+    el.querySelector('.star-btn').addEventListener('click', () => toggleStatus(card, 'starred'));
+    el.querySelector('.done-btn').addEventListener('click', () => toggleStatus(card, 'done'));
 
     gridEl.appendChild(el);
   });
@@ -161,8 +170,14 @@ function renderCards(){
 
 // ---------- Init ----------
 async function init(){
-  [week, ideas] = await Promise.all([fetchWeek(), fetchIdeas()]);
+  let statuses;
+  [week, ideas, statuses] = await Promise.all([fetchWeek(), fetchIdeas(), fetchStatuses()]);
   state.selectedDays = new Set(week.map(d => d.code));
+  Object.entries(statuses).forEach(([ideaId, status]) => {
+    const id = Number(ideaId);
+    if(status.starred) state.starred.add(id);
+    if(status.done) state.done.add(id);
+  });
   renderWeekstrip();
   renderFilters();
   renderCards();

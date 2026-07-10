@@ -17,10 +17,6 @@ const FALLBACK_IDEAS = [
   { id:12, title:'Kajaktocht door de gracht', category:'Actief', env:'outdoor', days:['ZA','ZO'], price:'€€', distance:'5 km', desc:'Anderhalf uur peddelen langs de mooiste grachtenpanden.' },
 ];
 
-function isSupabaseConfigured(){
-  return !SUPABASE_URL.startsWith('YOUR_') && !SUPABASE_ANON_KEY.startsWith('YOUR_');
-}
-
 async function fetchIdeas(){
   if(!isSupabaseConfigured()){
     console.warn('Supabase nog niet geconfigureerd (js/config.js), gebruik voorbeelddata.');
@@ -28,8 +24,7 @@ async function fetchIdeas(){
   }
 
   try {
-    const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    const { data, error } = await client.from('date_ideas').select('*').order('id');
+    const { data, error } = await supabaseClient.from('date_ideas').select('*').order('id');
     if(error) throw error;
 
     return data.map(row => ({
