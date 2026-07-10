@@ -1,18 +1,7 @@
 // ---------- Mock data ----------
-// TODO (build step 1): replace `week` with a real forecast for Boerdonk
-//   (lat 51.5595751, lng 5.6263531), e.g. via Open-Meteo.
+// The 7-day `week` forecast is fetched live in js/weather.js (Open-Meteo).
 // TODO (build step 2): replace `ideas` with rows read from the Supabase
 //   `date_ideas` table instead of this hardcoded array.
-
-const week = [
-  { code:'MA', label:'ma', date:'13 jul', condition:'sun',   temp:24 },
-  { code:'DI', label:'di', date:'14 jul', condition:'cloud', temp:21 },
-  { code:'WO', label:'wo', date:'15 jul', condition:'rain',  temp:18 },
-  { code:'DO', label:'do', date:'16 jul', condition:'cloud', temp:20 },
-  { code:'VR', label:'vr', date:'17 jul', condition:'sun',   temp:23 },
-  { code:'ZA', label:'za', date:'18 jul', condition:'sun',   temp:25 },
-  { code:'ZO', label:'zo', date:'19 jul', condition:'rain',  temp:19 },
-];
 
 const categories = ['Alle','Eten & drinken','Natuur','Cultuur','Actief','Evenementen','Verrassend'];
 const budgets = ['Alles','Gratis','€','€€','€€€'];

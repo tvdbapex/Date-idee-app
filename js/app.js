@@ -1,6 +1,7 @@
 // ---------- State ----------
+let week = []; // populated by fetchWeek() in js/weather.js on init
 const state = {
-  selectedDays: new Set(week.map(d => d.code)),
+  selectedDays: new Set(),
   category: 'Alle',
   budget: 'Alles',
   starred: new Set(),
@@ -158,6 +159,11 @@ function renderCards(){
 }
 
 // ---------- Init ----------
-renderWeekstrip();
-renderFilters();
-renderCards();
+async function init(){
+  week = await fetchWeek();
+  state.selectedDays = new Set(week.map(d => d.code));
+  renderWeekstrip();
+  renderFilters();
+  renderCards();
+}
+init();
