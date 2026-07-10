@@ -8,13 +8,13 @@ const MONTH_LABELS_NL = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug',
 
 // Fallback used if the forecast can't be fetched (offline, API down, etc.)
 const FALLBACK_WEEK = [
-  { code: 'MA', label: 'ma', date: '—', condition: 'cloud', temp: null },
-  { code: 'DI', label: 'di', date: '—', condition: 'cloud', temp: null },
-  { code: 'WO', label: 'wo', date: '—', condition: 'cloud', temp: null },
-  { code: 'DO', label: 'do', date: '—', condition: 'cloud', temp: null },
-  { code: 'VR', label: 'vr', date: '—', condition: 'cloud', temp: null },
-  { code: 'ZA', label: 'za', date: '—', condition: 'cloud', temp: null },
-  { code: 'ZO', label: 'zo', date: '—', condition: 'cloud', temp: null },
+  { code: 'MA', label: 'ma', date: '—', iso: null, condition: 'cloud', temp: null },
+  { code: 'DI', label: 'di', date: '—', iso: null, condition: 'cloud', temp: null },
+  { code: 'WO', label: 'wo', date: '—', iso: null, condition: 'cloud', temp: null },
+  { code: 'DO', label: 'do', date: '—', iso: null, condition: 'cloud', temp: null },
+  { code: 'VR', label: 'vr', date: '—', iso: null, condition: 'cloud', temp: null },
+  { code: 'ZA', label: 'za', date: '—', iso: null, condition: 'cloud', temp: null },
+  { code: 'ZO', label: 'zo', date: '—', iso: null, condition: 'cloud', temp: null },
 ];
 
 function conditionFromWeatherCode(code){
@@ -45,6 +45,7 @@ async function fetchWeek(){
         code: DAY_CODES[dayIndex],
         label: DAY_LABELS[dayIndex],
         date: `${d} ${MONTH_LABELS_NL[m - 1]}`,
+        iso, // 'YYYY-MM-DD', used to match scraped events to an exact day
         condition: conditionFromWeatherCode(data.daily.weathercode[i]),
         temp: Math.round(data.daily.temperature_2m_max[i]),
       };

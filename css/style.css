@@ -238,6 +238,14 @@ h1{
 .icon-btn.starred{ background: var(--sun-soft); border-color: var(--sun); color: #8a5f16; }
 .icon-btn.done{ background: var(--ink); color: var(--bg); border-color: var(--ink); }
 
+.source-link{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  text-decoration: none;
+}
+.source-link:hover{ color: var(--ink); text-decoration: underline; }
+
 .empty-state{
   grid-column: 1 / -1;
   text-align: center;

@@ -75,10 +75,16 @@ function renderFilters(){
 
 // ---------- Matching logic ----------
 function cardDayList(card){
-  return card.days === 'alle' ? week.map(d => d.code) : card.days;
+  if(card.days === 'alle') return week.map(d => d.code);
+  // Scraped events carry exact calendar dates (card.isDated), not recurring
+  // weekday codes — resolve them against this week's actual dates instead
+  // of matching every week on the same weekday.
+  if(card.isDated) return week.filter(d => card.days.includes(d.iso)).map(d => d.code);
+  return card.days;
 }
 
 function weatherMatchForCard(card){
+  if(!card.env) return null; // scraped events without a known indoor/outdoor
   const relevantDays = cardDayList(card).filter(code => state.selectedDays.has(code));
   for(const code of relevantDays){
     const day = week.find(d => d.code === code);
@@ -149,9 +155,10 @@ function renderCards(){
       <h3 class="card-title">${card.title}</h3>
       <p class="card-desc">${card.desc}</p>
       <div class="card-meta">
-        <span class="tag">${card.env === 'indoor' ? 'Binnen' : 'Buiten'}</span>
-        <span class="tag">${card.price}</span>
-        <span class="tag">${card.distance}</span>
+        ${card.env ? `<span class="tag">${card.env === 'indoor' ? 'Binnen' : 'Buiten'}</span>` : ''}
+        ${card.time ? `<span class="tag">${card.time}</span>` : ''}
+        ${card.price ? `<span class="tag">${card.price}</span>` : ''}
+        ${card.distance ? `<span class="tag">${card.distance}</span>` : ''}
         ${card.isEvent ? '<span class="tag event-tag">Evenement</span>' : ''}
         ${match ? `<span class="tag weather-match ${match.type === 'rain' ? 'rain-match' : ''}">${match.label}</span>` : ''}
       </div>
@@ -159,6 +166,7 @@ function renderCards(){
         <button type="button" class="icon-btn star-btn ${starred ? 'starred' : ''}">${starred ? '★ Favoriet' : '☆ Favoriet'}</button>
         <button type="button" class="icon-btn done-btn ${done ? 'done' : ''}">${done ? '✓ Gedaan' : 'Markeer gedaan'}</button>
       </div>
+      ${card.sourceUrl ? `<a class="source-link" href="${card.sourceUrl}" target="_blank" rel="noopener">Bekijk op bezoekmeierijstad.nl →</a>` : ''}
     `;
 
     el.querySelector('.star-btn').addEventListener('click', () => toggleStatus(card, 'starred'));
@@ -170,13 +178,15 @@ function renderCards(){
 
 // ---------- Init ----------
 async function init(){
-  let statuses;
-  [week, ideas, statuses] = await Promise.all([fetchWeek(), fetchIdeas(), fetchStatuses()]);
+  let curatedIdeas, scrapedEvents, statuses;
+  [week, curatedIdeas, scrapedEvents, statuses] = await Promise.all([
+    fetchWeek(), fetchIdeas(), fetchEvents(), fetchStatuses(),
+  ]);
+  ideas = [...curatedIdeas, ...scrapedEvents];
   state.selectedDays = new Set(week.map(d => d.code));
-  Object.entries(statuses).forEach(([ideaId, status]) => {
-    const id = Number(ideaId);
-    if(status.starred) state.starred.add(id);
-    if(status.done) state.done.add(id);
+  Object.entries(statuses).forEach(([cardId, status]) => {
+    if(status.starred) state.starred.add(cardId);
+    if(status.done) state.done.add(cardId);
   });
   renderWeekstrip();
   renderFilters();
