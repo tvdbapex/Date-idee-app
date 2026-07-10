@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wat gaan we doen — prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink: #1F2A24;
+    --muted: #6B7568;
+    --bg: #EDEFE6;
+    --card: #FFFFFF;
+    --line: #D9D4C4;
+    --sun: #E8A33D;
+    --sun-soft: #FBEBD3;
+    --rain: #4C7A93;
+    --rain-soft: #DEE9EE;
+    --event: #A13D63;
+    --event-soft: #F3DEE7;
+    --radius: 16px;
+  }
+
+  *{ box-sizing: border-box; }
+  html, body{ margin:0; padding:0; }
+  body{
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .app{
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+
+  /* ---------- Header ---------- */
+  .eyebrow{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 10px;
+  }
+  h1{
+    font-family: 'Fraunces', serif;
+    font-optical-sizing: auto;
+    font-weight: 600;
+    font-size: clamp(30px, 4.5vw, 44px);
+    line-height: 1.08;
+    margin: 0 0 10px;
+    letter-spacing: -0.01em;
+  }
+  .tagline{
+    font-size: 16px;
+    color: var(--muted);
+    margin: 0 0 32px;
+    max-width: 480px;
+  }
+
+  /* ---------- Week strip (signature element) ---------- */
+  .weekstrip{
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding: 4px 4px 14px;
+    margin-bottom: 28px;
+  }
+  .day-chip{
+    flex: 0 0 auto;
+    width: 96px;
+    padding: 14px 8px 12px;
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    background: var(--card);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    transition: transform .12s ease, box-shadow .12s ease, opacity .12s ease;
+    user-select: none;
+  }
+  .day-chip:hover{ transform: translateY(-2px); }
+  .day-chip:focus-visible{ outline: 2px solid var(--ink); outline-offset: 2px; }
+  .day-chip.off{ opacity: 0.38; }
+  .day-chip.sun.on{ box-shadow: 0 0 0 2px var(--sun); background: var(--sun-soft); }
+  .day-chip.cloud.on{ box-shadow: 0 0 0 2px var(--muted); }
+  .day-chip.rain.on{ box-shadow: 0 0 0 2px var(--rain); background: var(--rain-soft); }
+  .day-name{
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+  }
+  .day-date{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .day-temp{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    margin-top: 2px;
+  }
+
+  /* ---------- Filters ---------- */
+  .filters{
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .filter-row{
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .pill{
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    transition: background .12s ease, color .12s ease, border-color .12s ease;
+  }
+  .pill:hover{ border-color: var(--ink); }
+  .pill.active{
+    background: var(--ink);
+    color: var(--bg);
+    border-color: var(--ink);
+  }
+
+  /* ---------- Results ---------- */
+  .results-meta{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 14px;
+    letter-spacing: 0.02em;
+  }
+  .grid{
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 16px;
+  }
+  .card{
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: relative;
+    transition: box-shadow .15s ease, transform .15s ease;
+  }
+  .card:hover{ box-shadow: 0 6px 20px rgba(31,42,36,0.08); transform: translateY(-2px); }
+  .card.is-event{ border-color: var(--event); }
+  .card-top{
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .card-category{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .card.is-event .card-category{ color: var(--event); }
+  .card-title{
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 19px;
+    line-height: 1.2;
+    margin: 0;
+  }
+  .card-desc{
+    font-size: 13.5px;
+    color: var(--muted);
+    line-height: 1.45;
+    margin: 0;
+  }
+  .card-meta{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 2px;
+  }
+  .tag{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: var(--bg);
+    color: var(--muted);
+    border: 1px solid var(--line);
+  }
+  .tag.weather-match{
+    background: var(--sun-soft);
+    color: #8a5f16;
+    border-color: transparent;
+  }
+  .tag.weather-match.rain-match{
+    background: var(--rain-soft);
+    color: #2c5468;
+  }
+  .tag.event-tag{
+    background: var(--event-soft);
+    color: var(--event);
+    border-color: transparent;
+  }
+  .card-actions{
+    display: flex;
+    gap: 8px;
+    margin-top: auto;
+    padding-top: 6px;
+  }
+  .icon-btn{
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 9px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: transparent;
+    font-family: 'Inter', sans-serif;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--ink);
+    cursor: pointer;
+    transition: all .12s ease;
+  }
+  .icon-btn:hover{ border-color: var(--ink); }
+  .icon-btn.starred{ background: var(--sun-soft); border-color: var(--sun); color: #8a5f16; }
+  .icon-btn.done{ background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+  .empty-state{
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+  }
+  .empty-state p{ font-size: 14px; margin: 6px 0 0; }
+
+  .footnote{
+    margin-top: 40px;
+    font-size: 12.5px;
+    color: var(--muted);
+    border-top: 1px solid var(--line);
+    padding-top: 16px;
+  }
+
+  @media (max-width: 480px){
+    .day-chip{ width: 78px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <p class="eyebrow">Prototype — weekplanner</p>
+  <h1>Wat gaan we deze week doen?</h1>
+  <p class="tagline">Kies de dagen die jullie vrij hebben. Het weer bepaalt welke ideeën bovenaan komen.</p>
+
+  <div class="weekstrip" id="weekstrip"></div>
+
+  <div class="filters">
+    <div class="filter-row" id="categoryFilters"></div>
+    <div class="filter-row" id="budgetFilters"></div>
+  </div>
+
+  <div class="results-meta" id="resultCount"></div>
+  <div class="grid" id="cardGrid"></div>
+
+  <p class="footnote">Dit is een klikbaar prototype met voorbeelddata. Weer en evenementen komen later uit echte bronnen (bijv. Buienradar en uit.nl) — nu is het bedoeld om te testen hoe het voelt om te filteren op dag, weer en categorie.</p>
+</div>
+
+<script>
+  // ---------- Mock data ----------
+  const week = [
+    { code:'MA', label:'ma', date:'13 jul', condition:'sun',   temp:24 },
+    { code:'DI', label:'di', date:'14 jul', condition:'cloud', temp:21 },
+    { code:'WO', label:'wo', date:'15 jul', condition:'rain',  temp:18 },
+    { code:'DO', label:'do', date:'16 jul', condition:'cloud', temp:20 },
+    { code:'VR', label:'vr', date:'17 jul', condition:'sun',   temp:23 },
+    { code:'ZA', label:'za', date:'18 jul', condition:'sun',   temp:25 },
+    { code:'ZO', label:'zo', date:'19 jul', condition:'rain',  temp:19 },
+  ];
+
+  const categories = ['Alle','Eten & drinken','Natuur','Cultuur','Actief','Evenementen','Verrassend'];
+  const budgets = ['Alles','Gratis','€','€€','€€€'];
+
+  const ideas = [
+    { id:1, title:'Jaarmarkt op het plein', category:'Evenementen', env:'outdoor', days:['ZA'], price:'Gratis', distance:'3 km', desc:'Kraampjes met streekproducten en livemuziek op het centrale plein.', isEvent:true },
+    { id:2, title:'Wandeling langs de plas', category:'Natuur', env:'outdoor', days:'alle', price:'Gratis', distance:'5 km', desc:'Rustige route langs het water, mooi bij zonsondergang.' },
+    { id:3, title:'Matinee in de kleine bioscoop', category:'Cultuur', env:'indoor', days:'alle', price:'€€', distance:'4 km', desc:'Onafhankelijke films, knusse zaal met maar 40 stoelen.' },
+    { id:4, title:'Escape room: De Kluis', category:'Actief', env:'indoor', days:'alle', price:'€€', distance:'6 km', desc:'60 minuten om samen een bankkluis te kraken.' },
+    { id:5, title:'Rooftop terras met uitzicht', category:'Eten & drinken', env:'outdoor', days:'alle', price:'€€', distance:'7 km', desc:'Cocktails met uitzicht over de stad, het best bij zonsondergang.' },
+    { id:6, title:'Pottenbakken workshop', category:'Verrassend', env:'indoor', days:['DO','ZA'], price:'€€', distance:'5 km', desc:'Samen een kom of vaas draaien onder begeleiding.' },
+    { id:7, title:'Vlooienmarkt bij het station', category:'Evenementen', env:'outdoor', days:['ZO'], price:'Gratis', distance:'2 km', desc:'Tweedehands spulletjes, vintage kleding en oude platen.', isEvent:true },
+    { id:8, title:'Fietstocht door de polder', category:'Natuur', env:'outdoor', days:'alle', price:'Gratis', distance:'9 km', desc:'Vlak, rustig parcours langs molens en weilanden.' },
+    { id:9, title:'Wijnproeverij in de kelder', category:'Eten & drinken', env:'indoor', days:['VR','ZA'], price:'€€€', distance:'6 km', desc:'Vijf wijnen met bijpassende kaas, in een oud gewelf.' },
+    { id:10, title:'Kunstexpo in het pakhuis', category:'Cultuur', env:'indoor', days:'alle', price:'€', distance:'4 km', desc:'Werk van lokale kunstenaars in een omgebouwd pakhuis.' },
+    { id:11, title:'Openluchtbioscoop op het plein', category:'Evenementen', env:'outdoor', days:['VR'], price:'€', distance:'3 km', desc:'Grote film op groot scherm, neem een kleedje mee.', isEvent:true },
+    { id:12, title:'Kajaktocht door de gracht', category:'Actief', env:'outdoor', days:['ZA','ZO'], price:'€€', distance:'5 km', desc:'Anderhalf uur peddelen langs de mooiste grachtenpanden.' },
+  ];
+
+  // ---------- State ----------
+  const state = {
+    selectedDays: new Set(week.map(d => d.code)),
+    category: 'Alle',
+    budget: 'Alles',
+    starred: new Set(),
+    done: new Set(),
+  };
+
+  // ---------- Icons ----------
+  function weatherIcon(condition){
+    if(condition === 'sun'){
+      return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="5" fill="#E8A33D"/><g stroke="#E8A33D" stroke-width="1.6" stroke-linecap="round"><line x1="12" y1="1.5" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22.5"/><line x1="1.5" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22.5" y2="12"/><line x1="4.5" y1="4.5" x2="6.2" y2="6.2"/><line x1="17.8" y1="17.8" x2="19.5" y2="19.5"/><line x1="4.5" y1="19.5" x2="6.2" y2="17.8"/><line x1="17.8" y1="6.2" x2="19.5" y2="4.5"/></g></svg>';
+    }
+    if(condition === 'rain'){
+      return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6 12a4.5 4.5 0 0 1 1-8.9A6 6 0 0 1 18.6 6.6 4 4 0 0 1 18 14.5H7A4.5 4.5 0 0 1 6 12Z" fill="#DEE9EE" stroke="#4C7A93" stroke-width="1.3"/><g stroke="#4C7A93" stroke-width="1.6" stroke-linecap="round"><line x1="8" y1="17" x2="7" y2="20"/><line x1="12" y1="17" x2="11" y2="20"/><line x1="16" y1="17" x2="15" y2="20"/></g></svg>';
+    }
+    return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6 13a4.5 4.5 0 0 1 1-8.9A6 6 0 0 1 18.6 7.6 4 4 0 0 1 18 15.5H7A4.5 4.5 0 0 1 6 13Z" fill="#EDEFE6" stroke="#6B7568" stroke-width="1.3"/></svg>';
+  }
+
+  // ---------- Render: week strip ----------
+  const weekstripEl = document.getElementById('weekstrip');
+  function renderWeekstrip(){
+    weekstripEl.innerHTML = '';
+    week.forEach(d => {
+      const on = state.selectedDays.has(d.code);
+      const chip = document.createElement('button');
+      chip.className = `day-chip ${d.condition} ${on ? 'on' : 'off'}`;
+      chip.setAttribute('type','button');
+      chip.setAttribute('aria-pressed', on);
+      chip.innerHTML = `
+        <span class="day-name">${d.label}</span>
+        ${weatherIcon(d.condition)}
+        <span class="day-temp">${d.temp}°</span>
+        <span class="day-date">${d.date}</span>
+      `;
+      chip.addEventListener('click', () => {
+        if(state.selectedDays.has(d.code)){
+          state.selectedDays.delete(d.code);
+        } else {
+          state.selectedDays.add(d.code);
+        }
+        renderWeekstrip();
+        renderCards();
+      });
+      weekstripEl.appendChild(chip);
+    });
+  }
+
+  // ---------- Render: filter pills ----------
+  function renderPillGroup(container, options, current, onSelect){
+    container.innerHTML = '';
+    options.forEach(opt => {
+      const pill = document.createElement('button');
+      pill.className = `pill ${opt === current ? 'active' : ''}`;
+      pill.type = 'button';
+      pill.textContent = opt;
+      pill.addEventListener('click', () => onSelect(opt));
+      container.appendChild(pill);
+    });
+  }
+
+  const categoryEl = document.getElementById('categoryFilters');
+  const budgetEl = document.getElementById('budgetFilters');
+  function renderFilters(){
+    renderPillGroup(categoryEl, categories, state.category, (opt) => {
+      state.category = opt; renderFilters(); renderCards();
+    });
+    renderPillGroup(budgetEl, budgets, state.budget, (opt) => {
+      state.budget = opt; renderFilters(); renderCards();
+    });
+  }
+
+  // ---------- Matching logic ----------
+  function cardDayList(card){
+    return card.days === 'alle' ? week.map(d => d.code) : card.days;
+  }
+
+  function weatherMatchForCard(card){
+    const relevantDays = cardDayList(card).filter(code => state.selectedDays.has(code));
+    for(const code of relevantDays){
+      const day = week.find(d => d.code === code);
+      if(card.env === 'outdoor' && day.condition === 'sun'){
+        return { label: `Mooi bij zon op ${day.label}`, type: 'sun' };
+      }
+      if(card.env === 'indoor' && day.condition === 'rain'){
+        return { label: `Fijn bij regen op ${day.label}`, type: 'rain' };
+      }
+    }
+    return null;
+  }
+
+  function matchScore(card){
+    const match = weatherMatchForCard(card);
+    return (card.isEvent ? 2 : 0) + (match ? 1 : 0);
+  }
+
+  // ---------- Render: cards ----------
+  const gridEl = document.getElementById('cardGrid');
+  const countEl = document.getElementById('resultCount');
+
+  function renderCards(){
+    const visible = ideas.filter(card => {
+      const dayMatch = cardDayList(card).some(code => state.selectedDays.has(code));
+      const catMatch = state.category === 'Alle' || card.category === state.category;
+      const budgetMatch = state.budget === 'Alles' || card.price === state.budget;
+      return dayMatch && catMatch && budgetMatch;
+    }).sort((a,b) => matchScore(b) - matchScore(a));
+
+    countEl.textContent = `${visible.length} ${visible.length === 1 ? 'idee' : 'ideeën'} gevonden voor de gekozen dagen`;
+
+    gridEl.innerHTML = '';
+    if(visible.length === 0){
+      gridEl.innerHTML = `<div class="empty-state">
+        <p>Geen ideeën voor deze combinatie.</p>
+        <p>Zet een extra dag aan of kies een andere categorie.</p>
+      </div>`;
+      return;
+    }
+
+    visible.forEach(card => {
+      const match = weatherMatchForCard(card);
+      const starred = state.starred.has(card.id);
+      const done = state.done.has(card.id);
+
+      const el = document.createElement('div');
+      el.className = `card ${card.isEvent ? 'is-event' : ''}`;
+      el.innerHTML = `
+        <div class="card-top">
+          <span class="card-category">${card.category}</span>
+        </div>
+        <h3 class="card-title">${card.title}</h3>
+        <p class="card-desc">${card.desc}</p>
+        <div class="card-meta">
+          <span class="tag">${card.env === 'indoor' ? 'Binnen' : 'Buiten'}</span>
+          <span class="tag">${card.price}</span>
+          <span class="tag">${card.distance}</span>
+          ${card.isEvent ? '<span class="tag event-tag">Evenement</span>' : ''}
+          ${match ? `<span class="tag weather-match ${match.type === 'rain' ? 'rain-match' : ''}">${match.label}</span>` : ''}
+        </div>
+        <div class="card-actions">
+          <button type="button" class="icon-btn star-btn ${starred ? 'starred' : ''}">${starred ? '★ Favoriet' : '☆ Favoriet'}</button>
+          <button type="button" class="icon-btn done-btn ${done ? 'done' : ''}">${done ? '✓ Gedaan' : 'Markeer gedaan'}</button>
+        </div>
+      `;
+
+      el.querySelector('.star-btn').addEventListener('click', () => {
+        starred ? state.starred.delete(card.id) : state.starred.add(card.id);
+        renderCards();
+      });
+      el.querySelector('.done-btn').addEventListener('click', () => {
+        done ? state.done.delete(card.id) : state.done.add(card.id);
+        renderCards();
+      });
+
+      gridEl.appendChild(el);
+    });
+  }
+
+  // ---------- Init ----------
+  renderWeekstrip();
+  renderFilters();
+  renderCards();
+</script>
+</body>
+</html>

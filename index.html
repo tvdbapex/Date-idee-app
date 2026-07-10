@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wat gaan we doen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app">
+
+  <p class="eyebrow">Weekplanner</p>
+  <h1>Wat gaan we deze week doen?</h1>
+  <p class="tagline">Kies de dagen die jullie vrij hebben. Het weer bepaalt welke ideeën bovenaan komen.</p>
+
+  <div class="weekstrip" id="weekstrip"></div>
+
+  <div class="filters">
+    <div class="filter-row" id="categoryFilters"></div>
+    <div class="filter-row" id="budgetFilters"></div>
+  </div>
+
+  <div class="results-meta" id="resultCount"></div>
+  <div class="grid" id="cardGrid"></div>
+
+  <p class="footnote">Weer en evenementen komen uit echte bronnen zodra die zijn aangesloten (zie briefing). Nu draait de app nog op voorbeelddata.</p>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
