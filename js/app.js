@@ -1,5 +1,6 @@
 // ---------- State ----------
 let week = []; // populated by fetchWeek() in js/weather.js on init
+let ideas = []; // populated by fetchIdeas() in js/ideas.js on init
 const state = {
   selectedDays: new Set(),
   category: 'Alle',
@@ -160,7 +161,7 @@ function renderCards(){
 
 // ---------- Init ----------
 async function init(){
-  week = await fetchWeek();
+  [week, ideas] = await Promise.all([fetchWeek(), fetchIdeas()]);
   state.selectedDays = new Set(week.map(d => d.code));
   renderWeekstrip();
   renderFilters();
