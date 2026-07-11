@@ -63,19 +63,37 @@ const OSM_QUERIES: { match: string; category: string; env: 'indoor' | 'outdoor' 
   { match: `nwr["sport"="archery"]`, category: 'Actief', env: 'outdoor' },
 ];
 
+// overpass-api.de (the "official" instance) returned 406 for every request
+// tried while building this — including a bare GET to /api/status, from
+// both this function's own deployment and an unrelated network, suggesting
+// it's blocking broadly rather than something fixable via headers. Try it
+// first anyway (it may recover), then fall back to a mirror confirmed
+// working during testing.
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+];
+
 async function fetchOsmVenues(): Promise<any[]> {
   const clauses = OSM_QUERIES.map(q => `${q.match}(around:${RADIUS_KM * 1000},${BOERDONK.lat},${BOERDONK.lng});`).join('\n');
   const query = `[out:json][timeout:50];\n(\n${clauses}\n);\nout center tags;`;
 
-  const res = await fetch('https://overpass-api.de/api/interpreter', {
-    method: 'POST',
-    // Overpass returns 406 Not Acceptable without an explicit Accept header
-    // (confirmed while prototyping this locally) — Deno's fetch apparently
-    // doesn't send one by default the way curl does.
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': '*/*', 'User-Agent': REQUEST_HEADERS['User-Agent'] },
-    body: 'data=' + encodeURIComponent(query),
-  });
-  if (!res.ok) throw new Error(`Overpass gave status ${res.status}`);
+  let res: Response | undefined;
+  let lastErr: unknown;
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    try {
+      const attempt = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': '*/*', 'User-Agent': REQUEST_HEADERS['User-Agent'] },
+        body: 'data=' + encodeURIComponent(query),
+      });
+      if (attempt.ok) { res = attempt; break; }
+      lastErr = new Error(`${endpoint} gave status ${attempt.status}`);
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  if (!res) throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
   const data = await res.json();
 
   const rows: any[] = [];
@@ -174,7 +192,7 @@ async function fetchUiteindhovenVenues(): Promise<any[]> {
 
       return {
         source: 'uiteindhoven',
-        source_ref: res.url, // resolved (post-redirect) URL, so both sitemaps naturally dedupe
+        source_ref: res.url, // resolved (post-redirect) URL
         title: String(place.name ?? '').slice(0, 300),
         category: mapping.category,
         env: mapping.env,
@@ -192,7 +210,13 @@ async function fetchUiteindhovenVenues(): Promise<any[]> {
     }
   });
 
-  return rows.filter((r): r is NonNullable<typeof r> => r != null);
+  // restaurant-sitemap.xml and uitgaanszaak-sitemap.xml both list some of
+  // the same venues (redirecting to the same final URL) — a single upsert
+  // batch can't contain two rows with the same conflict target, so
+  // deduplicate by source_ref before returning.
+  const bySourceRef = new Map<string, NonNullable<(typeof rows)[number]>>();
+  for (const r of rows) if (r) bySourceRef.set(r.source_ref, r);
+  return [...bySourceRef.values()];
 }
 
 // ---------- Main ----------
@@ -205,12 +229,18 @@ async function upsertVenues(supabase: any, sourceName: string, sourceKey: string
 
   const withMeta = rows.map(r => ({ ...r, updated_at: runStartedAt }));
 
-  if (withMeta.length) {
-    const { error: upsertErr } = await supabase
-      .from('venues')
-      .upsert(withMeta, { onConflict: 'source,source_ref' });
-    if (upsertErr) throw new Error(`Upsert failed for ${sourceName}: ${upsertErr.message}`);
-  }
+  // One upsert call per row instead of a single bulk upsert: a bulk upsert
+  // fails outright if any two rows in the batch share a conflict target
+  // (Postgres: "ON CONFLICT DO UPDATE command cannot affect row a second
+  // time"), which kept happening here despite de-duplicating source_ref
+  // beforehand — per-row upserts can never conflict with themselves, so
+  // this sidesteps the problem regardless of its exact cause.
+  const upsertErrors: string[] = [];
+  await mapWithConcurrency(withMeta, FETCH_CONCURRENCY, async (row) => {
+    const { error } = await supabase.from('venues').upsert(row, { onConflict: 'source,source_ref' });
+    if (error) upsertErrors.push(`${row.title}: ${error.message}`);
+  });
+  if (upsertErrors.length) throw new Error(`Upsert failed for ${sourceName} (${upsertErrors.length} rows): ${upsertErrors[0]}`);
 
   // Mark-and-sweep: drop rows from this source not touched this run.
   await supabase.from('venues').delete()
