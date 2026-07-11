@@ -24,7 +24,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const BOERDONK = { lat: 51.5595751, lng: 5.6263531 };
 const RADIUS_KM = 35;
-const FETCH_CONCURRENCY = 15;
+// Used both for fetching venue pages and for the per-row upsert loop (see
+// upsertVenues) — the latter got much heavier once bulk upserts were
+// replaced with ~500 individual calls, and 15 combined with retries hit
+// WORKER_RESOURCE_LIMIT. 8 keeps concurrent load lower.
+const FETCH_CONCURRENCY = 8;
 const REQUEST_HEADERS = { 'User-Agent': 'Mozilla/5.0 (compatible; date-app-scraper/1.0)' };
 
 // Supabase's client intermittently fails an early query with "JWT issued

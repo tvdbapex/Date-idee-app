@@ -35,13 +35,18 @@ const SOURCES = [
 const BOERDONK = { lat: 51.5595751, lng: 5.6263531 };
 const RADIUS_KM = 35;
 const HORIZON_DAYS = 60;
-const FETCH_CONCURRENCY = 20;
+// Sources run in parallel (see SOURCES.map below), each with its own
+// mapWithConcurrency pool — worst case total concurrent connections is
+// roughly SOURCES.length * FETCH_CONCURRENCY. With 6 sources, 20 blew
+// through the Edge Function's compute/connection budget (WORKER_RESOURCE_
+// LIMIT); 8 keeps the worst case around 48 and has run cleanly.
+const FETCH_CONCURRENCY = 8;
 // Edge Functions have a 150s wall-clock limit. RegioRadar Eindhoven alone
 // lists ~1,750 events (vs. ~90 for Bezoek Meierijstad) — fetching all of
 // them, even in parallel with the other sources, doesn't fit. Cap each
 // source to its most recently-updated listings (sitemap <lastmod>) so
 // runtime stays bounded regardless of how large a source's catalog grows.
-const MAX_EVENTS_PER_SOURCE = 900;
+const MAX_EVENTS_PER_SOURCE = 600;
 const REQUEST_HEADERS = { 'User-Agent': 'Mozilla/5.0 (compatible; date-app-scraper/1.0)' };
 
 function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
