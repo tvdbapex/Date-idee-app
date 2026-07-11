@@ -2,16 +2,18 @@
 // middenring, and buitenring (0-35km around Boerdonk) and upserts upcoming
 // events into the `events` table.
 //
-// All three sources below run on the same "Plaece" tourism-site platform,
-// so every event page embeds identical schema.org/Event JSON-LD (name,
+// All sources below run on the same "Plaece" tourism-site platform, so
+// every event page embeds identical schema.org/Event JSON-LD (name,
 // description, eventSchedule, geo) — that's what's parsed here, rather than
 // fragile HTML/CSS scraping.
 //
 // Drimble and Uitzinnig.nl (other sources named in the briefing) are NOT
 // scraped: Drimble's robots.txt has `User-agent: anthropic-ai / Disallow: /`
 // (an explicit opt-out), and Uitzinnig.nl runs a different platform with no
-// geo-coordinates in its data and no clear region-scoped listing — it needs
-// separate investigation before it can be added reliably.
+// geo-coordinates in its data — it needs separate investigation (likely
+// geocoding by address) before it can be added reliably. That leaves
+// 's-Hertogenbosch (Den Bosch) uncovered for now — no Plaece-platform
+// source was found for it.
 //
 // Deploy via the Supabase dashboard (Edge Functions -> New function ->
 // "fetch-events" -> paste this file) with "Verify JWT" turned OFF, since
@@ -25,6 +27,9 @@ const SOURCES = [
   { name: 'Bezoek Meierijstad', sitemapIndexUrl: 'https://www.bezoekmeierijstad.nl/sitemap/event.xml?_locale=nl' },
   { name: 'RegioRadar Eindhoven', sitemapIndexUrl: 'https://www.regioradareindhoven.nl/nl/sitemap/event.xml' },
   { name: 'UitInEindhoven', sitemapIndexUrl: 'https://www.uitineindhoven.nl/sitemap/event.xml?_locale=nl' },
+  { name: 'Beleef Boxtel', sitemapIndexUrl: 'https://www.beleefboxtel.nl/sitemap/event.xml?_locale=nl' },
+  { name: 'Tref het in Oss', sitemapIndexUrl: 'https://www.trefhetinoss.nl/sitemap/event.xml?_locale=nl' },
+  { name: 'Land van de Peel', sitemapIndexUrl: 'https://www.landvandepeel.nl/nl/sitemap/event.xml' },
 ];
 
 const BOERDONK = { lat: 51.5595751, lng: 5.6263531 };
