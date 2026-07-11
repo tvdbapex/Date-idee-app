@@ -1,13 +1,17 @@
-// Supabase Edge Function: scrapes Bezoek Meierijstad's agenda (kernregio,
-// 0-15km) and upserts upcoming events into the `events` table.
+// Supabase Edge Function: scrapes agenda sites covering kernregio,
+// middenring, and buitenring (0-35km around Boerdonk) and upserts upcoming
+// events into the `events` table.
 //
-// Source: https://www.bezoekmeierijstad.nl/agenda — every event page embeds
-// schema.org/Event JSON-LD (name, description, eventSchedule, geo), which is
-// what's parsed here rather than fragile HTML/CSS scraping.
+// All three sources below run on the same "Plaece" tourism-site platform,
+// so every event page embeds identical schema.org/Event JSON-LD (name,
+// description, eventSchedule, geo) — that's what's parsed here, rather than
+// fragile HTML/CSS scraping.
 //
-// Drimble (the other kernregio source from the briefing) is intentionally
-// NOT scraped: its robots.txt has `User-agent: anthropic-ai / Disallow: /`,
-// an explicit opt-out from the site operator.
+// Drimble and Uitzinnig.nl (other sources named in the briefing) are NOT
+// scraped: Drimble's robots.txt has `User-agent: anthropic-ai / Disallow: /`
+// (an explicit opt-out), and Uitzinnig.nl runs a different platform with no
+// geo-coordinates in its data and no clear region-scoped listing — it needs
+// separate investigation before it can be added reliably.
 //
 // Deploy via the Supabase dashboard (Edge Functions -> New function ->
 // "fetch-events" -> paste this file) with "Verify JWT" turned OFF, since
@@ -17,12 +21,22 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const SOURCE_NAME = 'Bezoek Meierijstad';
-const SITEMAP_INDEX_URL = 'https://www.bezoekmeierijstad.nl/sitemap/event.xml?_locale=nl';
+const SOURCES = [
+  { name: 'Bezoek Meierijstad', sitemapIndexUrl: 'https://www.bezoekmeierijstad.nl/sitemap/event.xml?_locale=nl' },
+  { name: 'RegioRadar Eindhoven', sitemapIndexUrl: 'https://www.regioradareindhoven.nl/nl/sitemap/event.xml' },
+  { name: 'UitInEindhoven', sitemapIndexUrl: 'https://www.uitineindhoven.nl/sitemap/event.xml?_locale=nl' },
+];
+
 const BOERDONK = { lat: 51.5595751, lng: 5.6263531 };
 const RADIUS_KM = 35;
 const HORIZON_DAYS = 60;
-const FETCH_CONCURRENCY = 6;
+const FETCH_CONCURRENCY = 20;
+// Edge Functions have a 150s wall-clock limit. RegioRadar Eindhoven alone
+// lists ~1,750 events (vs. ~90 for Bezoek Meierijstad) — fetching all of
+// them, even in parallel with the other sources, doesn't fit. Cap each
+// source to its most recently-updated listings (sitemap <lastmod>) so
+// runtime stays bounded regardless of how large a source's catalog grows.
+const MAX_EVENTS_PER_SOURCE = 900;
 const REQUEST_HEADERS = { 'User-Agent': 'Mozilla/5.0 (compatible; date-app-scraper/1.0)' };
 
 function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
@@ -34,11 +48,11 @@ function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: num
   return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
 }
 
-// Amsterdam wall-clock "today", as an ISO date string. The source's
-// timestamps have no UTC offset (venue-local time), so date comparisons
-// stay as plain string slices throughout — never routed through
-// Date/toISOString, which would apply the runtime's own timezone offset
-// and can silently shift the date, not just the displayed time.
+// Amsterdam wall-clock "today", as an ISO date string. Source timestamps
+// have no UTC offset (venue-local time), so date comparisons stay as plain
+// string slices throughout — never routed through Date/toISOString, which
+// would apply the runtime's own timezone offset and can silently shift the
+// date, not just the displayed time.
 function todayIsoString(): string {
   const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Amsterdam' });
   return fmt.format(new Date()); // en-CA gives YYYY-MM-DD
@@ -51,7 +65,7 @@ function addDaysToIsoString(iso: string, days: number): string {
 }
 
 function extractEventJsonLd(html: string): any | null {
-  const blocks = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)];
+  const blocks = [...html.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)];
   for (const [, raw] of blocks) {
     try {
       const parsed = JSON.parse(raw);
@@ -102,17 +116,105 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T)
   return results;
 }
 
-async function fetchEventUrls(): Promise<string[]> {
-  const idxRes = await fetch(SITEMAP_INDEX_URL, { headers: REQUEST_HEADERS });
+async function fetchEventUrls(sitemapIndexUrl: string): Promise<string[]> {
+  const idxRes = await fetch(sitemapIndexUrl, { headers: REQUEST_HEADERS });
   const idxXml = await idxRes.text();
   const pageUrls = [...idxXml.matchAll(/<loc>(.*?)<\/loc>/g)].map(m => m[1]);
 
   const pages = await mapWithConcurrency(pageUrls, FETCH_CONCURRENCY, async (url) => {
     const res = await fetch(url, { headers: REQUEST_HEADERS });
     const xml = await res.text();
-    return [...xml.matchAll(/<loc>(.*?)<\/loc>/g)].map(m => m[1]);
+    const entries: { url: string; lastmod: string }[] = [];
+    for (const [, block] of xml.matchAll(/<url>([\s\S]*?)<\/url>/g)) {
+      const locMatch = block.match(/<loc>(.*?)<\/loc>/);
+      if (!locMatch) continue;
+      const lastmodMatch = block.match(/<lastmod>(.*?)<\/lastmod>/);
+      entries.push({ url: locMatch[1], lastmod: lastmodMatch?.[1] ?? '' });
+    }
+    return entries;
   });
-  return pages.flat();
+
+  // Newest-updated first, capped — see MAX_EVENTS_PER_SOURCE above.
+  const all = pages.flat();
+  all.sort((a, b) => b.lastmod.localeCompare(a.lastmod));
+  return all.slice(0, MAX_EVENTS_PER_SOURCE).map(e => e.url);
+}
+
+async function fetchOneSource(supabase: any, sourceConfig: { name: string; sitemapIndexUrl: string }, today: string, horizon: string) {
+  const runStartedAt = new Date().toISOString();
+
+  const { data: source, error: sourceErr } = await supabase
+    .from('sources')
+    .select('id')
+    .eq('name', sourceConfig.name)
+    .single();
+  if (sourceErr || !source) throw new Error(`Source row missing for ${sourceConfig.name}: ${sourceErr?.message}`);
+
+  const eventUrls = await fetchEventUrls(sourceConfig.sitemapIndexUrl);
+
+  const rows = await mapWithConcurrency(eventUrls, FETCH_CONCURRENCY, async (url) => {
+    try {
+      const res = await fetch(url, { headers: REQUEST_HEADERS });
+      if (!res.ok) return [];
+      const html = await res.text();
+      const event = extractEventJsonLd(html);
+      if (!event) return [];
+
+      const geo = event.location?.geo;
+      if (!geo?.latitude || !geo?.longitude) return [];
+
+      const distance = haversineKm(BOERDONK, { lat: geo.latitude, lng: geo.longitude });
+      if (distance > RADIUS_KM) return [];
+
+      const occurrences = occurrenceDates(event, today, horizon);
+      return occurrences.map((occ: { date: string; time: string | null }) => ({
+        source_id: source.id,
+        source_url: url,
+        title: String(event.name ?? '').slice(0, 300),
+        description: event.description ?? null,
+        category: 'Evenementen',
+        env: null,
+        event_date: occ.date,
+        event_time: occ.time,
+        price: null,
+        location_name: event.location?.address?.addressLocality ?? null,
+        lat: geo.latitude,
+        lng: geo.longitude,
+        distance_km: Math.round(distance * 10) / 10,
+        image_url: Array.isArray(event.image) ? event.image[0] : (event.image ?? null),
+        updated_at: runStartedAt,
+      }));
+    } catch {
+      return []; // one bad event page shouldn't fail the whole run
+    }
+  });
+
+  const flatRows = rows.flat();
+
+  if (flatRows.length) {
+    const { error: upsertErr } = await supabase
+      .from('events')
+      .upsert(flatRows, { onConflict: 'source_url,event_date' });
+    if (upsertErr) throw new Error(`Upsert failed for ${sourceConfig.name}: ${upsertErr.message}`);
+  }
+
+  // Mark-and-sweep: drop future rows from this source that weren't seen
+  // this run (cancelled/removed events), plus anything now in the past.
+  await supabase.from('events').delete()
+    .eq('source_id', source.id)
+    .gte('event_date', today)
+    .lt('updated_at', runStartedAt);
+  await supabase.from('events').delete()
+    .eq('source_id', source.id)
+    .lt('event_date', today);
+
+  await supabase.from('sources').update({
+    last_fetched_at: runStartedAt,
+    last_status: 'ok',
+    last_error: null,
+  }).eq('id', source.id);
+
+  return { source: sourceConfig.name, eventUrls: eventUrls.length, occurrences: flatRows.length };
 }
 
 Deno.serve(async () => {
@@ -121,89 +223,25 @@ Deno.serve(async () => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   );
 
-  const runStartedAt = new Date().toISOString();
   const today = todayIsoString();
   const horizon = addDaysToIsoString(today, HORIZON_DAYS);
 
-  try {
-    const { data: source, error: sourceErr } = await supabase
-      .from('sources')
-      .select('id')
-      .eq('name', SOURCE_NAME)
-      .single();
-    if (sourceErr || !source) throw new Error(`Source row missing: ${sourceErr?.message}`);
-
-    const eventUrls = await fetchEventUrls();
-
-    const rows = await mapWithConcurrency(eventUrls, FETCH_CONCURRENCY, async (url) => {
-      try {
-        const res = await fetch(url, { headers: REQUEST_HEADERS });
-        if (!res.ok) return [];
-        const html = await res.text();
-        const event = extractEventJsonLd(html);
-        if (!event) return [];
-
-        const geo = event.location?.geo;
-        if (!geo?.latitude || !geo?.longitude) return [];
-
-        const distance = haversineKm(BOERDONK, { lat: geo.latitude, lng: geo.longitude });
-        if (distance > RADIUS_KM) return [];
-
-        const occurrences = occurrenceDates(event, today, horizon);
-        return occurrences.map(occ => ({
-          source_id: source.id,
-          source_url: url,
-          title: String(event.name ?? '').slice(0, 300),
-          description: event.description ?? null,
-          category: 'Evenementen',
-          env: null,
-          event_date: occ.date,
-          event_time: occ.time,
-          price: null,
-          location_name: event.location?.address?.addressLocality ?? null,
-          lat: geo.latitude,
-          lng: geo.longitude,
-          distance_km: Math.round(distance * 10) / 10,
-          image_url: Array.isArray(event.image) ? event.image[0] : (event.image ?? null),
-          updated_at: runStartedAt,
-        }));
-      } catch {
-        return []; // one bad event page shouldn't fail the whole run
-      }
-    });
-
-    const flatRows = rows.flat();
-
-    if (flatRows.length) {
-      const { error: upsertErr } = await supabase
-        .from('events')
-        .upsert(flatRows, { onConflict: 'source_url,event_date' });
-      if (upsertErr) throw new Error(`Upsert failed: ${upsertErr.message}`);
+  // Sources run in parallel, not sequentially — Edge Functions have a wall-
+  // clock execution limit (150s), and 3 sources run one after another
+  // blew past it even though each individually fits comfortably.
+  const results = await Promise.all(SOURCES.map(async (sourceConfig) => {
+    try {
+      return await fetchOneSource(supabase, sourceConfig, today, horizon);
+    } catch (err) {
+      await supabase.from('sources').update({
+        last_fetched_at: new Date().toISOString(),
+        last_status: 'error',
+        last_error: String(err),
+      }).eq('name', sourceConfig.name);
+      return { source: sourceConfig.name, error: String(err) };
     }
+  }));
 
-    // Mark-and-sweep: drop future rows from this source that weren't seen
-    // this run (cancelled/removed events), plus anything now in the past.
-    await supabase.from('events').delete()
-      .eq('source_id', source.id)
-      .gte('event_date', today)
-      .lt('updated_at', runStartedAt);
-    await supabase.from('events').delete()
-      .eq('source_id', source.id)
-      .lt('event_date', today);
-
-    await supabase.from('sources').update({
-      last_fetched_at: runStartedAt,
-      last_status: 'ok',
-      last_error: null,
-    }).eq('id', source.id);
-
-    return Response.json({ ok: true, eventUrls: eventUrls.length, occurrences: flatRows.length });
-  } catch (err) {
-    await supabase.from('sources').update({
-      last_fetched_at: runStartedAt,
-      last_status: 'error',
-      last_error: String(err),
-    }).eq('name', SOURCE_NAME);
-    return Response.json({ ok: false, error: String(err) }, { status: 500 });
-  }
+  const ok = results.every(r => !('error' in r));
+  return Response.json({ ok, results }, { status: ok ? 200 : 207 });
 });

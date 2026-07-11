@@ -147,7 +147,11 @@ function renderCards(){
     const done = state.done.has(card.id);
 
     const el = document.createElement('div');
-    el.className = `card ${card.isEvent ? 'is-event' : ''}`;
+    el.className = `card ${card.isEvent ? 'is-event' : ''} ${card.sourceUrl ? 'clickable' : ''}`;
+    if(card.sourceUrl){
+      el.tabIndex = 0;
+      el.setAttribute('role', 'link');
+    }
     el.innerHTML = `
       <div class="card-top">
         <span class="card-category">${card.category}</span>
@@ -159,6 +163,7 @@ function renderCards(){
         ${card.time ? `<span class="tag">${card.time}</span>` : ''}
         ${card.price ? `<span class="tag">${card.price}</span>` : ''}
         ${card.distance ? `<span class="tag">${card.distance}</span>` : ''}
+        ${card.rating ? `<span class="tag">★ ${card.rating.toFixed(1)}</span>` : ''}
         ${card.isEvent ? '<span class="tag event-tag">Evenement</span>' : ''}
         ${match ? `<span class="tag weather-match ${match.type === 'rain' ? 'rain-match' : ''}">${match.label}</span>` : ''}
       </div>
@@ -166,11 +171,27 @@ function renderCards(){
         <button type="button" class="icon-btn star-btn ${starred ? 'starred' : ''}">${starred ? '★ Favoriet' : '☆ Favoriet'}</button>
         <button type="button" class="icon-btn done-btn ${done ? 'done' : ''}">${done ? '✓ Gedaan' : 'Markeer gedaan'}</button>
       </div>
-      ${card.sourceUrl ? `<a class="source-link" href="${card.sourceUrl}" target="_blank" rel="noopener">Bekijk op bezoekmeierijstad.nl →</a>` : ''}
+      ${card.sourceUrl ? `<a class="source-link" href="${card.sourceUrl}" target="_blank" rel="noopener">Bekijk op ${new URL(card.sourceUrl).hostname.replace(/^www\./,'')} →</a>` : ''}
     `;
 
     el.querySelector('.star-btn').addEventListener('click', () => toggleStatus(card, 'starred'));
     el.querySelector('.done-btn').addEventListener('click', () => toggleStatus(card, 'done'));
+
+    if(card.sourceUrl){
+      const openSource = () => window.open(card.sourceUrl, '_blank', 'noopener');
+      el.addEventListener('click', (e) => {
+        // The star/done buttons and the source-link itself already handle
+        // their own click — don't also trigger the whole-card navigation.
+        if(e.target.closest('.card-actions') || e.target.closest('.source-link')) return;
+        openSource();
+      });
+      el.addEventListener('keydown', (e) => {
+        if(e.key === 'Enter' || e.key === ' '){
+          e.preventDefault();
+          openSource();
+        }
+      });
+    }
 
     gridEl.appendChild(el);
   });
@@ -178,11 +199,11 @@ function renderCards(){
 
 // ---------- Init ----------
 async function init(){
-  let curatedIdeas, scrapedEvents, statuses;
-  [week, curatedIdeas, scrapedEvents, statuses] = await Promise.all([
-    fetchWeek(), fetchIdeas(), fetchEvents(), fetchStatuses(),
+  let curatedIdeas, scrapedEvents, scrapedVenues, statuses;
+  [week, curatedIdeas, scrapedEvents, scrapedVenues, statuses] = await Promise.all([
+    fetchWeek(), fetchIdeas(), fetchEvents(), fetchVenues(), fetchStatuses(),
   ]);
-  ideas = [...curatedIdeas, ...scrapedEvents];
+  ideas = [...curatedIdeas, ...scrapedEvents, ...scrapedVenues];
   state.selectedDays = new Set(week.map(d => d.code));
   Object.entries(statuses).forEach(([cardId, status]) => {
     if(status.starred) state.starred.add(cardId);
