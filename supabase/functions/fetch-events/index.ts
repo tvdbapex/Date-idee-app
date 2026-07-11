@@ -108,6 +108,25 @@ function occurrenceDates(event: any, today: string, horizon: string) {
   return out;
 }
 
+// The Supabase client's first query in a cold invocation intermittently
+// fails with "JWT issued at future" (roughly 1 in 6 runs during testing,
+// spread across different sources each time — looks like a clock-skew
+// hiccup on Supabase's side, not anything specific to a given source).
+// This matters for the unattended cron runs, which won't get a manual
+// retry, so give the source lookup itself a couple of quick retries.
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (i < attempts - 1) await new Promise(r => setTimeout(r, 500 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+
 async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = new Array(items.length);
   let next = 0;
@@ -148,12 +167,11 @@ async function fetchEventUrls(sitemapIndexUrl: string): Promise<string[]> {
 async function fetchOneSource(supabase: any, sourceConfig: { name: string; sitemapIndexUrl: string }, today: string, horizon: string) {
   const runStartedAt = new Date().toISOString();
 
-  const { data: source, error: sourceErr } = await supabase
-    .from('sources')
-    .select('id')
-    .eq('name', sourceConfig.name)
-    .single();
-  if (sourceErr || !source) throw new Error(`Source row missing for ${sourceConfig.name}: ${sourceErr?.message}`);
+  const source = await withRetry(async () => {
+    const { data, error } = await supabase.from('sources').select('id').eq('name', sourceConfig.name).single();
+    if (error || !data) throw new Error(`Source row missing for ${sourceConfig.name}: ${error?.message}`);
+    return data;
+  });
 
   const eventUrls = await fetchEventUrls(sourceConfig.sitemapIndexUrl);
 

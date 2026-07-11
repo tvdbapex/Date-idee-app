@@ -27,6 +27,23 @@ const RADIUS_KM = 35;
 const FETCH_CONCURRENCY = 15;
 const REQUEST_HEADERS = { 'User-Agent': 'Mozilla/5.0 (compatible; date-app-scraper/1.0)' };
 
+// Supabase's client intermittently fails an early query with "JWT issued
+// at future" (seen on both fetch-events and here, on different calls each
+// time — looks like a clock-skew hiccup on Supabase's side). Matters most
+// for the unattended cron run, which won't get a manual retry.
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (i < attempts - 1) await new Promise(r => setTimeout(r, 500 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+
 function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
   const R = 6371;
   const dLat = (b.lat - a.lat) * Math.PI / 180;
@@ -237,8 +254,14 @@ async function upsertVenues(supabase: any, sourceName: string, sourceKey: string
   // this sidesteps the problem regardless of its exact cause.
   const upsertErrors: string[] = [];
   await mapWithConcurrency(withMeta, FETCH_CONCURRENCY, async (row) => {
-    const { error } = await supabase.from('venues').upsert(row, { onConflict: 'source,source_ref' });
-    if (error) upsertErrors.push(`${row.title}: ${error.message}`);
+    try {
+      await withRetry(async () => {
+        const { error } = await supabase.from('venues').upsert(row, { onConflict: 'source,source_ref' });
+        if (error) throw new Error(error.message);
+      });
+    } catch (err) {
+      upsertErrors.push(`${row.title}: ${err instanceof Error ? err.message : String(err)}`);
+    }
   });
   if (upsertErrors.length) throw new Error(`Upsert failed for ${sourceName} (${upsertErrors.length} rows): ${upsertErrors[0]}`);
 
