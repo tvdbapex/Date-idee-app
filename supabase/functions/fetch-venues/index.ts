@@ -5,8 +5,10 @@
 // 1. OpenStreetMap Overpass API — free, no key, structured tags. Used for
 //    activity categories that are well-tagged in OSM: karting, escape
 //    rooms, climbing, mini-golf, bowling, trampoline parks, arcades, darts,
-//    archery. No rating data. Axe throwing was checked and has no OSM
-//    coverage near Boerdonk as of writing — add it manually if you know one.
+//    archery, plus nature reserves/national parks/viewpoints (Natuur) and
+//    museums/galleries/theatres/castles (Cultuur). No rating data. Axe
+//    throwing was checked and has no OSM coverage near Boerdonk as of
+//    writing — add it manually if you know one.
 //
 // 2. uiteindhoven.com — WordPress site with schema.org LocalBusiness-family
 //    JSON-LD (Restaurant/BarOrPub/NightClub), including review ratings.
@@ -82,6 +84,16 @@ const OSM_QUERIES: { match: string; category: string; env: 'indoor' | 'outdoor' 
   { match: `nwr["leisure"="amusement_arcade"]`, category: 'Verrassend', env: 'indoor' },
   { match: `nwr["sport"="darts"]`, category: 'Verrassend', env: 'indoor' },
   { match: `nwr["sport"="archery"]`, category: 'Actief', env: 'outdoor' },
+  // Natuur and Cultuur were previously unreachable categories in the UI —
+  // nothing in events or the other venue sources ever tagged anything with
+  // them. These OSM tags fill that gap directly.
+  { match: `nwr["leisure"="nature_reserve"]`, category: 'Natuur', env: 'outdoor' },
+  { match: `nwr["boundary"="national_park"]`, category: 'Natuur', env: 'outdoor' },
+  { match: `nwr["tourism"="viewpoint"]`, category: 'Natuur', env: 'outdoor' },
+  { match: `nwr["tourism"="museum"]`, category: 'Cultuur', env: 'indoor' },
+  { match: `nwr["tourism"="gallery"]`, category: 'Cultuur', env: 'indoor' },
+  { match: `nwr["amenity"="theatre"]`, category: 'Cultuur', env: 'indoor' },
+  { match: `nwr["historic"="castle"]`, category: 'Cultuur', env: 'outdoor' },
 ];
 
 // overpass-api.de (the "official" instance) returned 406 for every request
@@ -89,11 +101,18 @@ const OSM_QUERIES: { match: string; category: string; env: 'indoor' | 'outdoor' 
 // both this function's own deployment and an unrelated network, suggesting
 // it's blocking broadly rather than something fixable via headers. Try it
 // first anyway (it may recover), then fall back to a mirror confirmed
-// working during testing.
+// working during testing. Adding the Natuur/Cultuur queries (heavier,
+// larger-geometry tags like national_park boundaries) revealed that
+// overpass-api.de doesn't always fail fast — it can also just hang, which
+// with no per-request timeout blew past Supabase's 150s idle-timeout
+// before the mirror fallback ever ran. Each attempt now aborts after 20s
+// (the mirror alone answers this query in ~14s) so a hang can't stall the
+// whole function.
 const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
   'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
 ];
+const OVERPASS_ATTEMPT_TIMEOUT_MS = 20000;
 
 async function fetchOsmVenues(): Promise<any[]> {
   const clauses = OSM_QUERIES.map(q => `${q.match}(around:${RADIUS_KM * 1000},${BOERDONK.lat},${BOERDONK.lng});`).join('\n');
@@ -107,6 +126,7 @@ async function fetchOsmVenues(): Promise<any[]> {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': '*/*', 'User-Agent': REQUEST_HEADERS['User-Agent'] },
         body: 'data=' + encodeURIComponent(query),
+        signal: AbortSignal.timeout(OVERPASS_ATTEMPT_TIMEOUT_MS),
       });
       if (attempt.ok) { res = attempt; break; }
       lastErr = new Error(`${endpoint} gave status ${attempt.status}`);
@@ -129,7 +149,8 @@ async function fetchOsmVenues(): Promise<any[]> {
     const distance = haversineKm(BOERDONK, { lat, lng });
     if (distance > RADIUS_KM) continue;
 
-    const tagKey = el.tags?.leisure || el.tags?.sport;
+    const tagKey = el.tags?.leisure || el.tags?.sport || el.tags?.boundary
+      || el.tags?.tourism || el.tags?.amenity || el.tags?.historic;
     const mapping = OSM_QUERIES.find(q => q.match.includes(`"${tagKey}"`));
 
     rows.push({
