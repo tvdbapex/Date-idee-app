@@ -98,6 +98,24 @@ h1{
   margin-top: 2px;
 }
 
+/* ---------- Search ---------- */
+.search-row{
+  margin-bottom: 14px;
+}
+.search-input{
+  width: 100%;
+  max-width: 360px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+}
+.search-input::placeholder{ color: var(--muted); }
+.search-input:focus-visible{ outline: 2px solid var(--ink); outline-offset: 2px; }
+
 /* ---------- Filters ---------- */
 .filters{
   display: flex;

@@ -4,7 +4,8 @@ let ideas = []; // populated by fetchIdeas() in js/ideas.js on init
 const state = {
   selectedDays: new Set(),
   category: 'Alle',
-  budget: 'Alles',
+  weather: 'Alles',
+  search: '',
   starred: new Set(),
   done: new Set(),
 };
@@ -63,15 +64,22 @@ function renderPillGroup(container, options, current, onSelect){
 }
 
 const categoryEl = document.getElementById('categoryFilters');
-const budgetEl = document.getElementById('budgetFilters');
+const weatherEl = document.getElementById('weatherFilters');
 function renderFilters(){
   renderPillGroup(categoryEl, categories, state.category, (opt) => {
     state.category = opt; renderFilters(); renderCards();
   });
-  renderPillGroup(budgetEl, budgets, state.budget, (opt) => {
-    state.budget = opt; renderFilters(); renderCards();
+  renderPillGroup(weatherEl, weatherFilters, state.weather, (opt) => {
+    state.weather = opt; renderFilters(); renderCards();
   });
 }
+
+// ---------- Search ----------
+const searchEl = document.getElementById('searchInput');
+searchEl.addEventListener('input', () => {
+  state.search = searchEl.value.trim().toLowerCase();
+  renderCards();
+});
 
 // ---------- Matching logic ----------
 function cardDayList(card){
@@ -126,8 +134,13 @@ function renderCards(){
   const visible = ideas.filter(card => {
     const dayMatch = cardDayList(card).some(code => state.selectedDays.has(code));
     const catMatch = state.category === 'Alle' || card.category === state.category;
-    const budgetMatch = state.budget === 'Alles' || card.price === state.budget;
-    return dayMatch && catMatch && budgetMatch;
+    const weatherMatch = state.weather === 'Alles'
+      || (state.weather === 'Leuk bij zon' && card.env === 'outdoor')
+      || (state.weather === 'Leuk bij regen' && card.env === 'indoor');
+    const searchMatch = !state.search
+      || card.title.toLowerCase().includes(state.search)
+      || (card.desc && card.desc.toLowerCase().includes(state.search));
+    return dayMatch && catMatch && weatherMatch && searchMatch;
   }).sort((a,b) => matchScore(b) - matchScore(a));
 
   countEl.textContent = `${visible.length} ${visible.length === 1 ? 'idee' : 'ideeën'} gevonden voor de gekozen dagen`;
@@ -136,7 +149,7 @@ function renderCards(){
   if(visible.length === 0){
     gridEl.innerHTML = `<div class="empty-state">
       <p>Geen ideeën voor deze combinatie.</p>
-      <p>Zet een extra dag aan of kies een andere categorie.</p>
+      <p>Zet een extra dag aan, kies een andere categorie, of pas de zoekopdracht aan.</p>
     </div>`;
     return;
   }
