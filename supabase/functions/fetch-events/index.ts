@@ -9,11 +9,15 @@
 //
 // Drimble and Uitzinnig.nl (other sources named in the briefing) are NOT
 // scraped: Drimble's robots.txt has `User-agent: anthropic-ai / Disallow: /`
-// (an explicit opt-out), and Uitzinnig.nl runs a different platform with no
-// geo-coordinates in its data — it needs separate investigation (likely
-// geocoding by address) before it can be added reliably. That leaves
-// 's-Hertogenbosch (Den Bosch) uncovered for now — no Plaece-platform
-// source was found for it.
+// (an explicit opt-out), and Uitzinnig.nl's full listing only renders after
+// JavaScript executes (VIEWSTATE-based pagination) — not reachable with a
+// lightweight HTTP scraper, unlike every other source here. That leaves
+// 's-Hertogenbosch (Den Bosch) uncovered — every candidate site checked for
+// it was either broken, JS-only, or blocked ClaudeBot/anthropic-ai in
+// robots.txt. Visit Brabant (province-wide, ~1,600 events, most well
+// outside 35km) was also left out deliberately — poor fetch-to-yield ratio
+// for a source this broad, and adding it risks repeating the
+// WORKER_RESOURCE_LIMIT issue too many parallel sources caused earlier.
 //
 // Deploy via the Supabase dashboard (Edge Functions -> New function ->
 // "fetch-events" -> paste this file) with "Verify JWT" turned OFF, since
@@ -30,6 +34,8 @@ const SOURCES = [
   { name: 'Beleef Boxtel', sitemapIndexUrl: 'https://www.beleefboxtel.nl/sitemap/event.xml?_locale=nl' },
   { name: 'Tref het in Oss', sitemapIndexUrl: 'https://www.trefhetinoss.nl/sitemap/event.xml?_locale=nl' },
   { name: 'Land van de Peel', sitemapIndexUrl: 'https://www.landvandepeel.nl/nl/sitemap/event.xml' },
+  { name: 'Visit Helmond', sitemapIndexUrl: 'https://www.visithelmond.nl/nl/sitemap/event.xml' },
+  { name: 'Visit Vught', sitemapIndexUrl: 'https://www.visitvught.nl/sitemap/event.xml?_locale=nl' },
 ];
 
 const BOERDONK = { lat: 51.5595751, lng: 5.6263531 };
@@ -37,16 +43,16 @@ const RADIUS_KM = 35;
 const HORIZON_DAYS = 60;
 // Sources run in parallel (see SOURCES.map below), each with its own
 // mapWithConcurrency pool — worst case total concurrent connections is
-// roughly SOURCES.length * FETCH_CONCURRENCY. With 6 sources, 20 blew
-// through the Edge Function's compute/connection budget (WORKER_RESOURCE_
-// LIMIT); 8 keeps the worst case around 48 and has run cleanly.
-const FETCH_CONCURRENCY = 8;
+// roughly SOURCES.length * FETCH_CONCURRENCY. 6 sources * 8 (=48) ran
+// cleanly; 8 sources * 8 (=64) hit WORKER_RESOURCE_LIMIT again. 5 keeps
+// 8 sources at 40, back under the working threshold.
+const FETCH_CONCURRENCY = 5;
 // Edge Functions have a 150s wall-clock limit. RegioRadar Eindhoven alone
 // lists ~1,750 events (vs. ~90 for Bezoek Meierijstad) — fetching all of
 // them, even in parallel with the other sources, doesn't fit. Cap each
 // source to its most recently-updated listings (sitemap <lastmod>) so
 // runtime stays bounded regardless of how large a source's catalog grows.
-const MAX_EVENTS_PER_SOURCE = 600;
+const MAX_EVENTS_PER_SOURCE = 400;
 const REQUEST_HEADERS = { 'User-Agent': 'Mozilla/5.0 (compatible; date-app-scraper/1.0)' };
 
 function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
