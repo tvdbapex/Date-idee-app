@@ -80,6 +80,18 @@ function addDaysToIsoString(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Best-effort duration guess from the title/description text — sources
+// don't carry a structured duration field, and detection here is not
+// reliable enough to trust fully, so this only ever nudges toward 'kort'
+// or 'hele_dag' on strong keyword signals and otherwise defaults to
+// 'halve_dag' (per the feature spec: don't rely on consistent detection).
+function guessDuration(title: string, description: string | null): string {
+  const text = `${title} ${description ?? ''}`.toLowerCase();
+  if (/hele dag|dagje uit|van ochtend tot avond|jaarmarkt|braderie/.test(text)) return 'hele_dag';
+  if (/avondvoorstelling|lezing|rondleiding|borrel|quiz|filmvoorstelling|concert\b/.test(text)) return 'kort';
+  return 'halve_dag';
+}
+
 function extractEventJsonLd(html: string): any | null {
   const blocks = [...html.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)];
   for (const [, raw] of blocks) {
@@ -200,12 +212,16 @@ async function fetchOneSource(supabase: any, sourceConfig: { name: string; sitem
       const distance = haversineKm(BOERDONK, { lat: geo.latitude, lng: geo.longitude });
       if (distance > RADIUS_KM) return [];
 
+      const title = String(event.name ?? '').slice(0, 300);
+      const description = event.description ?? null;
+      const duration = guessDuration(title, description);
+
       const occurrences = occurrenceDates(event, today, horizon);
       return occurrences.map((occ: { date: string; time: string | null }) => ({
         source_id: source.id,
         source_url: url,
-        title: String(event.name ?? '').slice(0, 300),
-        description: event.description ?? null,
+        title,
+        description,
         category: 'Evenementen',
         env: null,
         event_date: occ.date,
@@ -216,6 +232,7 @@ async function fetchOneSource(supabase: any, sourceConfig: { name: string; sitem
         lng: geo.longitude,
         distance_km: Math.round(distance * 10) / 10,
         image_url: Array.isArray(event.image) ? event.image[0] : (event.image ?? null),
+        duration,
         updated_at: runStartedAt,
       }));
     } catch {
