@@ -3,3 +3,5 @@
 
 const categories = ['Alle','Eten & drinken','Natuur','Cultuur','Actief','Evenementen','Verrassend'];
 const weatherFilters = ['Alles','Leuk bij zon','Leuk bij regen'];
+const durationFilters = ['Alles','Kort','Halve dag','Hele dag'];
+const DURATION_LABELS = { kort: 'Kort', halve_dag: 'Halve dag', hele_dag: 'Hele dag' };

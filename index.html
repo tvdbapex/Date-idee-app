@@ -25,12 +25,36 @@
   <div class="filters">
     <div class="filter-row" id="categoryFilters"></div>
     <div class="filter-row" id="weatherFilters"></div>
+    <div class="filter-row" id="durationFilters"></div>
   </div>
+
+  <div class="quick-picks-header">
+    <h2 class="section-title">Snelle keuzes per categorie</h2>
+    <button type="button" class="btn-surprise" id="surpriseBtn">🎲 Verras me</button>
+  </div>
+  <div class="quick-picks" id="quickPicks"></div>
 
   <div class="results-meta" id="resultCount"></div>
   <div class="grid" id="cardGrid"></div>
 
   <p class="footnote">Weer komt live van Open-Meteo. Evenementen (dagelijks ververst) komen van Bezoek Meierijstad, RegioRadar Eindhoven en UitInEindhoven; vaste locaties (wekelijks ververst) van OpenStreetMap en UitEindhoven — samen 0-35km rond Boerdonk.</p>
+</div>
+
+<button type="button" class="programma-toggle" id="programmaToggle">Programma</button>
+<div class="programma-panel" id="programmaPanel">
+  <div class="programma-panel-header">
+    <h3>Jullie avondje</h3>
+  </div>
+  <div class="programma-list" id="programmaList"></div>
+  <p class="programma-total" id="programmaTotal"></p>
+</div>
+
+<div class="modal-backdrop" id="surpriseModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Verrassing">
+    <button type="button" class="modal-close" id="surpriseCloseBtn" aria-label="Sluiten">×</button>
+    <div id="surpriseModalContent"></div>
+    <button type="button" class="btn-surprise-again" id="surpriseAgainBtn">Nog een keer verrassen</button>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>

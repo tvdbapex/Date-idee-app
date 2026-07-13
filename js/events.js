@@ -22,6 +22,8 @@ async function fetchEvents(){
       .order('event_date');
     if(error) throw error;
 
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
     return data.map(row => ({
       id: `event-${row.id}`,
       title: row.title,
@@ -35,6 +37,11 @@ async function fetchEvents(){
       desc: row.description,
       isEvent: true,
       sourceUrl: row.source_url,
+      duration: row.duration,
+      // created_at is only set once, at first insert — the fetch-events
+      // upsert never overwrites it on repeat runs — so this is a genuine
+      // "first seen" timestamp, not a last-updated one.
+      isNew: new Date(row.created_at).getTime() > sevenDaysAgo,
     }));
   } catch(err){
     console.warn('Kon evenementen niet ophalen uit Supabase.', err);

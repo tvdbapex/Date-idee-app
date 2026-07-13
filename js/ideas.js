@@ -23,6 +23,8 @@ async function fetchIdeas(){
       distance: row.distance_km != null ? `${row.distance_km} km` : '',
       desc: row.description,
       isEvent: row.is_event,
+      duration: row.duration,
+      bestSeasons: row.best_seasons,
     }));
   } catch(err){
     console.warn('Kon ideeën niet ophalen uit Supabase.', err);
