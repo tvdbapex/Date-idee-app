@@ -205,6 +205,7 @@ const programmaToggleEl = document.getElementById('programmaToggle');
 const programmaPanelEl = document.getElementById('programmaPanel');
 const programmaListEl = document.getElementById('programmaList');
 const programmaTotalEl = document.getElementById('programmaTotal');
+const programmaCloseBtn = document.getElementById('programmaCloseBtn');
 
 function isInProgramma(cardId){
   return state.programma.includes(cardId);
@@ -248,6 +249,9 @@ function renderProgramma(){
 
 programmaToggleEl.addEventListener('click', () => {
   programmaPanelEl.classList.toggle('open');
+});
+programmaCloseBtn.addEventListener('click', () => {
+  programmaPanelEl.classList.remove('open');
 });
 
 // ---------- Verrassingsknop (feature 2) ----------

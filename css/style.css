@@ -455,7 +455,7 @@ h1{
   background: var(--ink);
   color: var(--bg);
   cursor: pointer;
-  z-index: 90;
+  z-index: 96;
   box-shadow: 0 4px 16px rgba(31, 42, 36, 0.25);
 }
 .programma-panel{
@@ -473,12 +473,28 @@ h1{
   z-index: 95;
 }
 .programma-panel.open{ transform: translateX(0); }
+.programma-panel-header{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
 .programma-panel-header h3{
   font-family: 'Fraunces', serif;
   font-weight: 600;
   font-size: 20px;
   margin: 0 0 16px;
 }
+.programma-close{
+  background: none;
+  border: none;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 0 0 8px;
+}
+.programma-close:hover{ color: var(--ink); }
 .programma-list{
   display: flex;
   flex-direction: column;
