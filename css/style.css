@@ -401,6 +401,7 @@ h1{
   padding: 20px;
   z-index: 100;
 }
+.modal-backdrop[hidden]{ display: none; }
 .modal{
   background: var(--card);
   border-radius: var(--radius);
