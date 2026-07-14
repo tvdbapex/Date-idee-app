@@ -5,10 +5,12 @@
 // 1. OpenStreetMap Overpass API — free, no key, structured tags. Used for
 //    activity categories that are well-tagged in OSM: karting, escape
 //    rooms, climbing, mini-golf, bowling, trampoline parks, arcades, darts,
-//    archery, plus nature reserves/national parks/viewpoints (Natuur) and
-//    museums/galleries/theatres/castles (Cultuur). No rating data. Axe
-//    throwing was checked and has no OSM coverage near Boerdonk as of
-//    writing — add it manually if you know one.
+//    archery, plus nature reserves/national parks/viewpoints (Natuur),
+//    museums/galleries/theatres/castles (Cultuur), and pottery/glass/
+//    jewellery/candle/soap/brewery/photography studios plus arts centres/
+//    hackerspaces (Creatief). No rating data. Axe throwing was checked and
+//    has no OSM coverage near Boerdonk as of writing — add it manually if
+//    you know one.
 //
 // 2. uiteindhoven.com — WordPress site with schema.org LocalBusiness-family
 //    JSON-LD (Restaurant/BarOrPub/NightClub), including review ratings.
@@ -94,6 +96,19 @@ const OSM_QUERIES: { match: string; category: string; env: 'indoor' | 'outdoor' 
   { match: `nwr["tourism"="gallery"]`, category: 'Cultuur', env: 'indoor' },
   { match: `nwr["amenity"="theatre"]`, category: 'Cultuur', env: 'indoor' },
   { match: `nwr["historic"="castle"]`, category: 'Cultuur', env: 'outdoor' },
+  // Creatief: pottery/glass-blowing/jewellery studios and arts/maker
+  // spaces — hands-on workshop venues (pottenbakken, kaarsen maken,
+  // sieraden maken, etc.), as opposed to Cultuur's museums/theatres/
+  // galleries which are for viewing rather than doing.
+  { match: `nwr["craft"="pottery"]`, category: 'Creatief', env: 'indoor' },
+  { match: `nwr["craft"="glaziery"]`, category: 'Creatief', env: 'indoor' },
+  { match: `nwr["craft"="jeweller"]`, category: 'Creatief', env: 'indoor' },
+  { match: `nwr["amenity"="arts_centre"]`, category: 'Creatief', env: 'indoor' },
+  { match: `nwr["leisure"="hackerspace"]`, category: 'Creatief', env: 'indoor' },
+  { match: `nwr["craft"="chandler"]`, category: 'Creatief', env: 'indoor' },
+  { match: `nwr["craft"="brewery"]`, category: 'Creatief', env: 'indoor' },
+  { match: `nwr["craft"="soapmaker"]`, category: 'Creatief', env: 'indoor' },
+  { match: `nwr["craft"="photographer"]`, category: 'Creatief', env: 'indoor' },
 ];
 
 // overpass-api.de (the "official" instance) returned 406 for every request
@@ -150,7 +165,7 @@ async function fetchOsmVenues(): Promise<any[]> {
     if (distance > RADIUS_KM) continue;
 
     const tagKey = el.tags?.leisure || el.tags?.sport || el.tags?.boundary
-      || el.tags?.tourism || el.tags?.amenity || el.tags?.historic;
+      || el.tags?.tourism || el.tags?.amenity || el.tags?.historic || el.tags?.craft;
     const mapping = OSM_QUERIES.find(q => q.match.includes(`"${tagKey}"`));
 
     rows.push({

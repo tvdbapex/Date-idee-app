@@ -92,6 +92,20 @@ function guessDuration(title: string, description: string | null): string {
   return 'halve_dag';
 }
 
+// Same best-effort approach as guessDuration: the platform's own dataLayer
+// `categories` tag turned out to be per-source and inconsistent for
+// workshops (seen values include "workshop-2" and "varia" for what are
+// clearly the same kind of event), so title/description keywords are the
+// more reliable signal here despite being imperfect. Everything else stays
+// 'Evenementen', the existing default.
+function guessCategory(title: string, description: string | null): string {
+  const text = `${title} ${description ?? ''}`.toLowerCase();
+  if (/workshop|cursus|masterclass|keramiek|pottenbak|kaarsen (maken|gieten)|sieraden maken|zilversmeden|schilder(en|cursus)|teken(en|cursus)|naaien|breien|\bhaken\b|houtbewerk|glasblazen|glas.?fusen|bloemschikken|boeket maken|zeep maken|bierbrouwen|parfum|kalligrafie|handlettering|knutsel/.test(text)) {
+    return 'Creatief';
+  }
+  return 'Evenementen';
+}
+
 function extractEventJsonLd(html: string): any | null {
   const blocks = [...html.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)];
   for (const [, raw] of blocks) {
@@ -237,6 +251,7 @@ async function fetchOneSource(supabase: any, sourceConfig: { name: string; sitem
       const title = String(event.name ?? '').slice(0, 300);
       const description = event.description ?? null;
       const duration = guessDuration(title, description);
+      const category = guessCategory(title, description);
 
       const occurrences = occurrenceDates(event, today, horizon);
       return occurrences.map((occ: { date: string; time: string | null }) => ({
@@ -244,7 +259,7 @@ async function fetchOneSource(supabase: any, sourceConfig: { name: string; sitem
         source_url: url,
         title,
         description,
-        category: 'Evenementen',
+        category,
         env: null,
         event_date: occ.date,
         event_time: occ.time,
