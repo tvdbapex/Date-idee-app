@@ -107,6 +107,22 @@ function extractEventJsonLd(html: string): any | null {
   return null;
 }
 
+// Every page on this platform also pushes a GTM dataLayer event with a
+// `categories` array (e.g. `{"categories":["film"],"city":"Eindhoven"}`),
+// separate from the JSON-LD block. It's a much more reliable film-detection
+// signal than title matching — titles range from "Filmtip: X" to bare movie
+// names like "Jimpa" with nothing else distinguishing them from any other
+// event title.
+function extractPageCategories(html: string): string[] {
+  const match = html.match(/dataLayer\.push\(\{"categories":(\[[^\]]*\])/);
+  if (!match) return [];
+  try {
+    return JSON.parse(match[1]);
+  } catch {
+    return [];
+  }
+}
+
 function occurrenceDates(event: any, today: string, horizon: string) {
   const raw: string[] = [];
   if (Array.isArray(event.eventSchedule) && event.eventSchedule.length) {
@@ -211,6 +227,12 @@ async function fetchOneSource(supabase: any, sourceConfig: { name: string; sitem
 
       const distance = haversineKm(BOERDONK, { lat: geo.latitude, lng: geo.longitude });
       if (distance > RADIUS_KM) return [];
+
+      // Filter out film screenings entirely — "go watch a movie" isn't a
+      // distinctive local activity suggestion, and this ranges from bare
+      // cinema listings to filmhuis/arthouse programming with nothing in
+      // the title alone to tell them apart from any other event.
+      if (extractPageCategories(html).includes('film')) return [];
 
       const title = String(event.name ?? '').slice(0, 300);
       const description = event.description ?? null;
